@@ -1,0 +1,80 @@
+---
+- name: Provision a Debian Linux desktop system
+  hosts: localhost
+  tasks:
+
+    - name: Update the package cache (apt-get update)
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Upgrade the system (apt-get upgrade)
+      apt:
+        upgrade: yes
+
+    - name: Install some basic packages
+      apt:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - vim
+        - emacs
+        - mc
+        - irssi
+        - sudo
+
+    - name: Extending the sources.list with the contrib and non-free
+      lineinfile:
+        path: /etc/apt/sources.list
+        state: present
+        line: "{{ item }}"
+      with_items:
+        - "deb http://ftp.hu.debian.org/debian {{ ansible_distribution_release }} contrib"
+        - "deb http://ftp.hu.debian.org/debian {{ ansible_distribution_release }} non-free"
+      register: chsources
+
+    - name: Update the package cache in case of sources change
+      apt:
+        update_cache: yes
+      when: chsources.changed
+
+    - name: Install the msttcorefonts package
+      apt:
+        name: msttcorefonts
+        state: present
+
+    - name: Add the Google key to apt
+      apt_key:
+        url: 'https://dl-ssl.google.com/linux/linux_signing_key.pub'
+
+    - name: Add the Google repository to the sources
+      apt_repository:
+        repo: 'deb http://dl.google.com/linux/chrome/deb/ stable main'
+
+    - name: Install the Google Chrome browser
+      apt:
+        name: google-chrome-stable
+        state: present
+
+    - name: Install my emacs configuration
+      get_url:
+        url: https://raw.githubusercontent.com/stiron/ansible-users/master/files/emacs
+        dest: "{{ item }}"
+        mode: 0600
+      with_items:
+        - /home/tmolnar/.emacs
+        - /root/.emacs
+
+    - name: Set up the sudoers file
+      lineinfile:
+        dest: /etc/sudoers
+        state: present
+        regexp: '^%sudo\s'
+        line: '%sudo ALL=(ALL) NOPASSWD: ALL'
+        validate: 'visudo -cf %s'
+
+    - name: Add my user to the sudo group
+      user:
+        name: tmolnar
+        groups: sudo
+        append: yes
